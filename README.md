@@ -21,8 +21,10 @@ This AI Research Assistant leverages multiple technologies to create an intellig
 - **Search the web** using Tavily API for real-time information
 - **Scrape and process** web content from URLs
 - **Store knowledge** in a vector database for efficient retrieval
+- **Build knowledge autonomously** by storing valuable research findings
 - **Answer questions** using Google's Gemini AI with contextual understanding
 - **Operate as an agent** with multiple tools for complex research tasks
+- **Self-improve over time** as it accumulates more research
 - **Serve via API** using FastAPI for web integration
 
 ### Key Technologies
@@ -33,6 +35,17 @@ This AI Research Assistant leverages multiple technologies to create an intellig
 - **Tavily Search**: Web search API
 - **BeautifulSoup**: Web scraping
 - **FastAPI**: REST API framework
+
+### 🌟 Self-Improving Intelligence
+
+Unlike traditional chatbots, this assistant **learns and improves** with every interaction:
+
+- 🔍 **Discovers**: Searches and reads web content
+- 💾 **Remembers**: Automatically stores valuable findings
+- 🎯 **Retrieves**: Uses stored knowledge for future questions
+- 📈 **Grows**: Knowledge base expands over time
+
+**Example**: Ask about "AI frameworks" → Agent searches web, stores findings → Next user asking about AI frameworks gets instant answers from stored knowledge without re-searching the web!
 
 ---
 
@@ -62,7 +75,8 @@ User Query
     │                   │
     ├─→ Tavily Search   ├─→ Web Scraper
     ├─→ Vector Search   │   (scraper.py)
-    └─→ Web Reader      │
+    ├─→ Web Reader      │
+    └─→ Store Research  │
                         ↓
               ┌──────────────────┐
               │ Vector Database  │
@@ -285,7 +299,13 @@ def collect_research(query):
 
 ### 4. **tools.py** - Agent Tool Definitions
 
-**Purpose**: Defines the tools that the AI agent can use to accomplish tasks.
+**Purpose**: Defines the 4 tools that the AI agent can use to accomplish tasks.
+
+**Available Tools**:
+1. **`search_tool`** (TavilySearch) - Search the web
+2. **`read_page`** - Read content from a specific URL  
+3. **`retrieve_docs`** - Search the vector database
+4. **`store_research`** - Save findings to vector database ⭐ NEW
 
 **Why we use it**:
 - Gives the agent capabilities beyond just text generation
@@ -368,13 +388,67 @@ def read_page(url: str) -> str:
 - Provides detailed content beyond search snippets
 - **Why separate from retrieve_docs**: Different use cases (web vs. database)
 
+#### `store_research(text)` Tool
+
+```python
+@tool
+def store_research(text: str) -> str:
+    """Store research content into the vector database."""
+    vector_store.add_texts([text])
+    return "Research stored successfully"
+```
+
+**What it does**: Stores arbitrary text content into the vector database for future retrieval
+
+**Parameters**:
+- `text` (str): The research content to store
+
+**Returns**:
+- Success message confirming storage
+
+**Why we use it**:
+- Enables the agent to proactively build its knowledge base
+- Allows storing important findings during research
+- Agent can save information it discovers for future queries
+- Creates a self-improving system that learns from interactions
+
+**Why each part**:
+
+1. **`@tool` decorator**:
+   - Makes function available to the agent
+   - Auto-generates description from docstring
+   - **Why**: Agent can decide when to store information
+
+2. **`vector_store.add_texts([text])`**:
+   - Converts text to embedding vector
+   - Stores in ChromaDB with indexing
+   - **Why wrap in list**: add_texts expects a list of documents
+
+3. **Return success message**:
+   - Confirms to agent that storage succeeded
+   - Allows agent to track what was stored
+   - **Why**: Provides feedback for agent's decision-making
+
+**Use cases**:
+- Agent discovers important information while researching
+- Storing summaries or key findings from web pages
+- Building knowledge base incrementally through conversations
+- Learning from user interactions
+
+**Example workflow**:
+1. User asks about a topic
+2. Agent searches web and reads pages
+3. Agent stores relevant findings using this tool
+4. Future queries can retrieve this stored knowledge
+
 #### `tools` List
 
 ```python
-tools = [search_tool, read_page, retrieve_docs]
+tools = [search_tool, read_page, retrieve_docs, store_research]
 ```
-- **What it does**: Bundles all tools for the agent
+- **What it does**: Bundles all 4 tools for the agent
 - **Why**: Single point of configuration for agent capabilities
+- **Why this combination**: Covers the full research cycle (search → read → retrieve → store)
 
 ---
 
@@ -493,15 +567,21 @@ def answer_question(query):
 agent_executor = create_agent(
     model=llm,
     tools=tools,
-    system_prompt="""You are an AI research assistant. 
-    Use the available tools to search for information and answer questions.
-    When using the vector knowledge search, look for relevant stored research.
-    Be thorough and cite your sources.""",
+    system_prompt="""You are an AI research assistant.
+
+    Your tasks:
+    1. Search the internet when information is missing
+    2. Read webpages to gather detailed information
+    3. Store important research into the knowledge base
+    4. Retrieve stored knowledge when useful
+    5. Provide clear answers with sources
+
+    Always try to store valuable research for future queries.""",
     debug=True
 )
 ```
 
-**What it does**: Creates a LangGraph-based agent that can use tools
+**What it does**: Creates a LangGraph-based agent that can use tools and proactively build knowledge
 
 **Why each parameter**:
 
@@ -517,8 +597,12 @@ agent_executor = create_agent(
 
 3. **`system_prompt`**:
    - Defines agent's role and behavior
+   - Provides clear task breakdown (search, read, store, retrieve, answer)
+   - Encourages proactive knowledge storage
    - Instructions on when/how to use tools
-   - **Why**: Guides agent decision-making
+   - **Why**: Guides agent decision-making and creates self-improving behavior
+   - **Task-oriented structure**: Helps agent understand its workflow
+   - **"Always try to store"**: Makes agent build knowledge base automatically
 
 4. **`debug=True`**:
    - Prints agent's reasoning steps
@@ -562,14 +646,21 @@ def run_agent(query):
 
 **Agent workflow**:
 1. Receives user query
-2. Reasons about which tools to use
-3. Calls tools (search, retrieve, read)
-4. Synthesizes information
-5. Generates final response
+2. Checks stored knowledge using `retrieve_docs`
+3. If information is insufficient, searches web using `search_tool`
+4. Reads promising pages using `read_page`
+5. Stores valuable findings using `store_research`
+6. Synthesizes information from all sources
+7. Generates final response with citations
 
 **Difference from `answer_question()`**:
 - `answer_question()`: Simple RAG (retrieve → answer)
-- `run_agent()`: Complex reasoning (can search web, read pages, use multiple tools)
+- `run_agent()`: Complex reasoning with autonomous knowledge building:
+  - Can search web for new information
+  - Can read specific pages for details
+  - Can store important findings for future use
+  - Builds knowledge base over time
+  - Makes the system self-improving
 
 ---
 
@@ -656,6 +747,7 @@ GET http://localhost:8080/ask?q=what are the latest AI frameworks?
 | `vector_store.similarity_search()` | vectore_store.py | Find similar documents by semantic meaning |
 | `retrieve_context()` | agent.py | Get relevant context for a query |
 | `retrieve_docs()` | tools.py | Tool wrapper for vector search |
+| `store_research()` | tools.py | Agent tool to store new findings into vector DB |
 
 #### **Web Data Collection**
 | Function | File | Purpose |
@@ -772,6 +864,8 @@ python test_agent.py
 - Prints detailed response
 
 **Expected output**: Comprehensive answer citing frameworks like LangChain, AutoGen, CrewAI, etc.
+
+**Note**: The agent may also store valuable research findings it discovers, which you'll see in the debug output showing tool calls to `store_research`.
 
 ### 4. Run Web API
 
@@ -910,11 +1004,13 @@ Failed to send telemetry event ClientStartEvent
 **For a complex research task**:
 1. User asks question via API
 2. Agent analyzes what information is needed
-3. Agent calls `search_tool` to find web sources
-4. Agent calls `read_page` to get detailed content
-5. Agent calls `retrieve_docs` to check existing knowledge
-6. Agent synthesizes all information
-7. Returns comprehensive answer with sources
+3. Agent calls `retrieve_docs` to check existing knowledge
+4. If insufficient, agent calls `search_tool` to find web sources
+5. Agent calls `read_page` to get detailed content from URLs
+6. Agent calls `store_research` to save valuable findings
+7. Agent synthesizes all information
+8. Returns comprehensive answer with sources
+9. **Next time**: Stored research is available via `retrieve_docs`
 
 ### Key Concepts
 
@@ -931,11 +1027,49 @@ Failed to send telemetry event ClientStartEvent
 - LLM decides which tools to use
 - Executes tools based on user needs
 - Reasons over results
-- **Why**: Handles complex, multi-step tasks
+- Stores valuable findings autonomously
+- **Why**: Handles complex, multi-step tasks and builds knowledge over time
+
+**Self-Improving System**:
+- Agent can store research it discovers
+- Stored knowledge becomes available for future queries
+- Knowledge base grows with each interaction
+- Reduces need for repeated web searches
+- **Why**: Creates increasingly efficient and knowledgeable assistant
 
 ---
 
-## 📚 Further Enhancements
+## � Complete Research Workflow
+
+### Example: User Asks "What are the latest AI frameworks?"
+
+**First Time (Building Knowledge)**:
+```
+1. User Query → Agent receives question
+2. Agent checks vector DB via retrieve_docs → finds limited info
+3. Agent searches web via search_tool → gets 5 relevant URLs
+4. Agent reads pages via read_page → extracts detailed content
+5. Agent stores findings via store_research → saves to vector DB ⭐
+6. Agent synthesizes all sources → generates comprehensive answer
+```
+
+**Second Time (Using Stored Knowledge)**:
+```
+1. Different user asks similar question
+2. Agent checks vector DB via retrieve_docs → finds rich stored content
+3. Agent directly answers using stored knowledge → instant response!
+4. No web search needed → faster and more efficient
+```
+
+**Benefits**:
+- ⚡ Faster responses as knowledge grows
+- 💰 Lower API costs (fewer web searches)
+- 📚 Accumulated expertise over time
+- 🎯 More comprehensive answers from multiple sources
+
+---
+
+## �📚 Further Enhancements
 
 ### Potential Improvements
 
@@ -945,11 +1079,18 @@ Failed to send telemetry event ClientStartEvent
    - Maintain context across turns
 
 2. **Expand tool set**:
-   - Add calculator for math
-   - Add code execution for analysis
-   - Add database queries
+   - Add calculator for math operations
+   - Add code execution for data analysis
+   - Add database queries for structured data
+   - Add document upload (PDF, Word, etc.)
 
-3. **Improve error handling**:
+3. **Enhanced knowledge management**:
+   - Add tool to delete or update stored research
+   - Implement knowledge tagging/categorization
+   - Add source tracking for stored content
+   - Deduplication of similar content
+
+4. **Improve error handling**:
    - Retry failed web requests
    - Validate inputs
    - Better error messages
