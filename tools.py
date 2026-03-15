@@ -22,9 +22,17 @@ def read_page(url: str) -> str:
     """Read the content of a webpage given its URL."""
     return read_webpage(url)
 
+@tool
+def store_research(text: str) -> str:
+    """store research content into the vector database"""
+    
+    vector_store.add_texts([text])
+    return "Research stored successfully"
+    
 
 tools=[
     search_tool,
     read_page,
-    retrieve_docs
+    retrieve_docs,
+    store_research,
 ]

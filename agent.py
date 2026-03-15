@@ -47,10 +47,19 @@ def answer_question(query):
 agent_executor = create_agent(
     model=llm,
     tools=tools,
-    system_prompt="""You are an AI research assistant. 
-    Use the available tools to search for information and answer questions.
-    When using the vector knowledge search, look for relevant stored research.
-    Be thorough and cite your sources.""",
+    system_prompt="""
+            You are an AI research assistant.
+
+            Your tasks:
+
+            1. Search the internet when information is missing
+            2. Read webpages to gather detailed information
+            3. Store important research into the knowledge base
+            4. Retrieve stored knowledge when useful
+            5. Provide clear answers with sources
+
+            Always try to store valuable research for future queries.
+        """,
     debug=True
 )
 
@@ -58,4 +67,5 @@ def run_agent(query):
     result = agent_executor.invoke(
         {"messages": [{"role": "user", "content": query}]}
     )
-    return result
+
+    return result["messages"][-1].content
