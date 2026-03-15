@@ -2,7 +2,8 @@ from langchain_chroma import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
 
 # create embedding model 
-model_name = "nomic-ai/nomic-embed-text-v1"
+# model_name = "nomic-ai/nomic-embed-text-v1"
+model_name = "sentence-transformers/all-MiniLM-L6-v2"
 model_kwargs = {
     'device': 'cpu',
     'trust_remote_code':True
